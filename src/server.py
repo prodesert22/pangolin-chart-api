@@ -16,15 +16,15 @@ class Server():
             ),
         )
         self.args = arg_parser.parse_args()
-        
+
         self.api_server = APIServer()
         
         configure_logging(self.args)
-        
+
     def stop(self) -> None:
         log.debug('Shutdown initiated')
         self.api_server.stop()
-    
+
     def start(self) -> None:
         self.api_server.start(
             host=self.args.api_host,

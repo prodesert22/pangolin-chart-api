@@ -73,11 +73,11 @@ class CandlesResource(Resource):
                 "help": "tokenB: {error_msg}",
             },
             {
-                "name": "period",
+                "name": "interval",
                 "type": int,
                 "required": True,
                 "location": "args",
-                "help": "Period invalid: {error_msg}",
+                "help": "Interval invalid: {error_msg}",
                 "choices": (
                     5 * 60,
                     15 * 60,
@@ -86,6 +86,22 @@ class CandlesResource(Resource):
                     24 * 60 * 60,
                     7 * 24 *  60 * 60,
                 ),
+            },
+            {
+                "name": "limit",
+                "type": int,
+                "required": False,
+                "location": "args",
+                "help": "limit: {error_msg}",
+                "default": 100,
+            },
+            {
+                "name": "skip",
+                "type": int,
+                "required": False,
+                "location": "args",
+                "help": "skip: {error_msg}",
+                "default": 0,
             },
         ]
         args = add_args(ARGS)
@@ -107,6 +123,12 @@ class CandlesResource(Resource):
 
         return api_response(
             _wrap_in_ok_result(
-                functions.get_candles(args["tokenA"], args["tokenB"], args["period"], 1000)
+                functions.get_candles(
+                    args["tokenA"].lower(),
+                    args["tokenB"].lower(),
+                    args["interval"],
+                    args["limit"],
+                    args["skip"],
+                )
             )
         )

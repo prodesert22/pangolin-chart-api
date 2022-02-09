@@ -74,7 +74,7 @@ class APIServer():
             host: str = '127.0.0.1',
             port: int = 43114,
     ) -> None:
-        wsgi_logger = logging.getLogger(__name__ + '.pywsgi')
+        wsgi_logger = logging.getLogger(f'{__name__}.pywsgi')
         self.wsgiserver = WSGIServer(
             listener=(host, port),
             application=self.flask_app,
