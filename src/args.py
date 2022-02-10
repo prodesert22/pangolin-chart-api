@@ -4,7 +4,7 @@ from typing import Any, List
 
 class CommandAction(argparse.Action):
     """Interprets the positional argument as a command if that command exists"""
-    def __init__(  # pylint: disable=unused-argument
+    def __init__(
             self,
             option_strings: List[str],
             dest: str,
@@ -46,8 +46,8 @@ def app_args(prog: str, description: str) -> argparse.ArgumentParser:
         default='debug',
     )
     p.add_argument(
-        'version',
-        help='Shows the rotkehlchen version',
+        '--version',
+        help='Shows the program version',
         action=CommandAction,
     )
 
