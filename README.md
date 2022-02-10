@@ -24,6 +24,10 @@ Run the command bellow:
 
 `pip install -r requirements.txt`
 
+## Compile Cython files
+
+`python setup.py build_ext --inplace`
+
 ## Run
 
 `python main.py <args>`
