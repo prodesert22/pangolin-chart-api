@@ -17,7 +17,15 @@ class Server():
         )
         self.args = arg_parser.parse_args()
 
-        self.api_server = APIServer()
+        options = {
+            'bind': f'{self.args.api_host}:{self.args.api_port}',
+            'workers': 4,
+            'accesslog': 'console.log',
+            'logger_class': 'src.logging.GunicornLogger',
+            'access_log_format': '"%(r)s" %(s)s %(b)s "%(f)s"'
+        }
+
+        self.api_server = APIServer(options)
         
         configure_logging(self.args)
 
@@ -26,7 +34,5 @@ class Server():
         self.api_server.stop()
 
     def start(self) -> None:
-        self.api_server.start(
-            host=self.args.api_host,
-            port=self.args.rest_api_port,
-        )
+        print(f'Running server at {self.args.api_host}:{self.args.api_port}')
+        self.api_server.run()

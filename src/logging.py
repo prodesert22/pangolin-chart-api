@@ -1,6 +1,7 @@
 import argparse
 import logging
 
+from gunicorn.glogging import Logger as GLogger
 from typing import Any, Dict, MutableMapping, Tuple
 
 class LogsAdapter(logging.LoggerAdapter):
@@ -39,4 +40,10 @@ def configure_logging(args: argparse.Namespace) -> None:
     #handler.setLevel(logging.INFO)
     handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
     logger.addHandler(handler) 
-    
+
+class GunicornLogger(GLogger):
+    def setup(self, cfg):
+        logger = logging.getLogger('request')
+        super(GunicornLogger, self).setup(cfg)
+        self.access_log = logger
+        self.error_log = logger

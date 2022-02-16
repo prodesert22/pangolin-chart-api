@@ -29,7 +29,7 @@ def app_args(prog: str, description: str) -> argparse.ArgumentParser:
         default='127.0.0.1',
     )
     p.add_argument(
-        '--rest-api-port',
+        '--api-port',
         help='The port on which the rest API will run',
         type=int,
         default=43114,
@@ -43,7 +43,7 @@ def app_args(prog: str, description: str) -> argparse.ArgumentParser:
         '--loglevel',
         help='Choose the logging level',
         choices=['debug', 'info', 'warn', 'error', 'critical'],
-        default='debug',
+        default='info',
     )
     p.add_argument(
         '--version',

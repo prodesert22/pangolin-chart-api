@@ -1,0 +1,47 @@
+CANDLES_ARGS = [
+    {
+        "name": "tokenA",
+        "type": str,
+        "required": True,
+        "location": "args",
+        "help": "tokenA: {error_msg}",
+    },
+    {
+        "name": "tokenB",
+        "type": str,
+        "required": True,
+        "location": "args",
+        "help": "tokenB: {error_msg}",
+    },
+    {
+        "name": "interval",
+        "type": int,
+        "required": True,
+        "location": "args",
+        "help": "Interval invalid: {error_msg}",
+        "choices": (
+            5 * 60,
+            15 * 60,
+            60 ** 2,
+            4 * 60 * 60,
+            24 * 60 * 60,
+            7 * 24 *  60 * 60,
+        ),
+    },
+    {
+        "name": "limit",
+        "type": int,
+        "required": False,
+        "location": "args",
+        "help": "limit: {error_msg}",
+        "default": 100,
+    },
+    {
+        "name": "skip",
+        "type": int,
+        "required": False,
+        "location": "args",
+        "help": "skip: {error_msg}",
+        "default": 0,
+    },
+]

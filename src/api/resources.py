@@ -4,9 +4,11 @@ from flask import Response, make_response, request as flask_request
 from flask_restful import Resource, reqparse
 from http import HTTPStatus
 from typing import Any, Dict, List, Optional
-from web3 import Web3
+from eth_utils import is_address
 
 from src.api.app import cache
+from src.api.args import CANDLES_ARGS
+
 import api_functions
 
 def _wrap_in_ok_result(result: Any) -> Dict[str, Any]:
@@ -57,60 +59,13 @@ class CandlesResource(Resource):
     
     @cache.cached(timeout=300, key_prefix=cache_key)
     def get(self) -> Response:
-        ARGS: List[Dict[str, Any]] = [
-            {
-                "name": "tokenA",
-                "type": str,
-                "required": True,
-                "location": "args",
-                "help": "tokenA: {error_msg}",
-            },
-            {
-                "name": "tokenB",
-                "type": str,
-                "required": True,
-                "location": "args",
-                "help": "tokenB: {error_msg}",
-            },
-            {
-                "name": "interval",
-                "type": int,
-                "required": True,
-                "location": "args",
-                "help": "Interval invalid: {error_msg}",
-                "choices": (
-                    5 * 60,
-                    15 * 60,
-                    60 ** 2,
-                    4 * 60 * 60,
-                    24 * 60 * 60,
-                    7 * 24 *  60 * 60,
-                ),
-            },
-            {
-                "name": "limit",
-                "type": int,
-                "required": False,
-                "location": "args",
-                "help": "limit: {error_msg}",
-                "default": 100,
-            },
-            {
-                "name": "skip",
-                "type": int,
-                "required": False,
-                "location": "args",
-                "help": "skip: {error_msg}",
-                "default": 0,
-            },
-        ]
-        args = add_args(ARGS)
+        args = add_args(CANDLES_ARGS)
         functions = api_functions.Candles()
         
         message = {}
-        if not Web3.isAddress(args["tokenA"]):
+        if not is_address(args["tokenA"]):
             message["tokenA"] = "tokenA is not address"
-        if not Web3.isAddress(args["tokenB"]):
+        if not is_address(args["tokenB"]):
             message["tokenB"] = "tokenB is not address"
         
         if message.keys():

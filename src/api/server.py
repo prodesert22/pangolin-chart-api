@@ -2,7 +2,7 @@ import logging
 
 from flask import Response
 from flask_restful import Api, Resource
-from gevent.pywsgi import WSGIServer
+from gunicorn.app.base import BaseApplication
 from http import HTTPStatus
 from typing import List, Tuple
 from werkzeug.exceptions import NotFound
@@ -14,9 +14,6 @@ from src.api.resources import (
     CandlesResource,
 )
 from src.logging import LogsAdapter
-
-logger = logging.getLogger(__name__)
-log = LogsAdapter(logger)
 
 URLS = [
     ('/candles', CandlesResource),
@@ -43,9 +40,9 @@ def endpoint_not_found(e: 'NotFound') -> Response:
     msg = e.description if isinstance(e, NotFound) else 'invalid endpoint'
     return api_response(wrap_in_fail_result(msg), HTTPStatus.NOT_FOUND)
 
-class APIServer():
+class APIServer(BaseApplication):
     
-    def __init__(self) -> None:
+    def __init__(self, options=None) -> None:
 
         flask_api_context = api
         setup_urls(
@@ -54,11 +51,12 @@ class APIServer():
         )
 
         self.flask_app = app
-
-        self.wsgiserver: Optional[WSGIServer] = None
+        self.options = options or {}
 
         self.flask_app.errorhandler(HTTPStatus.NOT_FOUND)(endpoint_not_found)
         self.flask_app.register_error_handler(Exception, self.unhandled_exception)
+
+        super().__init__()
 
     @staticmethod
     def unhandled_exception(exception: Exception) -> Response:
@@ -69,26 +67,11 @@ class APIServer():
         )
         return api_response(wrap_in_fail_result(str(exception)), HTTPStatus.INTERNAL_SERVER_ERROR)
 
-    def start(
-            self,
-            host: str = '127.0.0.1',
-            port: int = 43114,
-    ) -> None:
-        wsgi_logger = logging.getLogger(f'{__name__}.pywsgi')
-        self.wsgiserver = WSGIServer(
-            listener=(host, port),
-            application=self.flask_app,
-            log=wsgi_logger,
-            error_log=wsgi_logger,
-        )
-        msg = f'REST API server is running at: {host}:{port}'
-        print(msg)
-        log.info(msg)
-        #create server 
-        self.wsgiserver.serve_forever()
+    def load_config(self):
+        config = {key: value for key, value in self.options.items()
+                  if key in self.cfg.settings and value is not None}
+        for key, value in config.items():
+            self.cfg.set(key.lower(), value)
 
-    def stop(self, timeout: int = 5) -> None:
-        """Stops the API server. If handlers are running after timeout they are killed"""
-        if self.wsgiserver is not None:
-            self.wsgiserver.stop(timeout)
-            self.wsgiserver = None
+    def load(self):
+        return self.flask_app
