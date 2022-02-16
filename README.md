@@ -61,3 +61,5 @@ This endpoint return all candles in the requested range between tokenA/tokenB
 `/candles?tokenA=0x60781c2586d68229fde47564546784ab3faca982&tokenB=0xd586e7f844cea2f87f50152665bcbc2c279d8d70&interval=300`
 
 Returns the PNG/DAI.e pair price candles  
+
+**Some parts of this code are based on** [rotki](https://github.com/rotki/rotki)
