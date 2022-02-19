@@ -43,7 +43,7 @@ def configure_logging(args: argparse.Namespace) -> None:
 
 class GunicornLogger(GLogger):
     def setup(self, cfg):
-        logger = logging.getLogger('request')
+        logger = logging.getLogger('wsgi-server')
         super(GunicornLogger, self).setup(cfg)
         self.access_log = logger
         self.error_log = logger
