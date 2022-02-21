@@ -25,7 +25,12 @@ class Graph():
         try:
             result = self.client.execute(gql(queryStr), variable_values=params)
         except (requests.exceptions.RequestException, Exception) as e:
-            logger.warn(f'Error in fetch graph api.\nerror: {e}\nurl: {self.url}\nQuery: {queryStr}')
+            logger.warn(f"""Error in fetch graph api.\n
+                            Error: {e}\n
+                            Url: {self.url}\n
+                            Query: {queryStr}\n
+                            Params: {params}
+                        """)
             return None
 
         return result

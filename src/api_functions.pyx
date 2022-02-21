@@ -1,17 +1,17 @@
 import logging
+import numpy as np
+
 from datetime import datetime
 
 from src.constants.coins import (
     WAVAX,
-    PNG,
-    WETH,
-    DAI,
     USDC,
     USDT,
 )
 from src.utils.graph import Graph
+from src.utils.worker import Worker
 
-DEFAULTCOINS = [WAVAX, USDC, USDT, WETH, PNG, DAI]
+DEFAULTCOINS = [WAVAX, USDC, USDT]
 
 logger = logging.getLogger('__main__.' + __name__)
 
@@ -21,8 +21,8 @@ cdef class Candles():
     cdef list defaulCoins
 
     def __cinit__(self):
-        self.candlesSubgraph = Graph("https://api.thegraph.com/subgraphs/name/pangolindex/pangolin-dex-candles")
-        self.exchangeSubgraph = Graph("https://api.thegraph.com/subgraphs/name/pangolindex/exchange")
+        self.candlesSubgraph = "https://api.thegraph.com/subgraphs/name/pangolindex/pangolin-dex-candles" 
+        self.exchangeSubgraph = "https://api.thegraph.com/subgraphs/name/pangolindex/exchange"
 
     cdef tuple order_pair(self, str tokenA, str tokenB):
         """Order the tokens for token0 and token1 according to the order in the blockchain
@@ -41,6 +41,25 @@ cdef class Candles():
         cdef str token1 = pair[1]
         return token0, token1
 
+    cdef dict get_pair_data(self, str token0, str token1):
+        cdef str queryStr = """
+            query pairData($token0: String!, $token1: String!) {
+                pairs(where: {token0: $token0, token1: $token1}) {
+                    reserve0
+                    reserve1
+                    reserveUSD
+                }
+            }
+        """
+
+        params = {
+            "token0": token0,
+            "token1": token1,
+        }
+
+        result = Graph(self.exchangeSubgraph).query(queryStr, params)
+        return result
+
     cdef float current_price(self, str tokenA, str tokenB, str midToken = ""):
         """Get current price of tokenA in relation to tokenB, if there is a token between them, use that token to get the price
 
@@ -52,23 +71,11 @@ cdef class Candles():
             currentPrice: float: price of tokenA/tokenB 
         """
 
-        cdef str queryStr = """
-            query pairData($token0: String!, $token1: String!) {
-                pairs(where: {token0: $token0, token1: $token1}) {
-                    reserve0
-                    reserve1
-                }
-            }
-        """
         # if not exist modToken, use only tokenA and tokenB
         if midToken == "":
             token0, token1 = self.order_pair(tokenA, tokenB)
-            params = {
-                "token0": token0,
-                "token1": token1,
-            }
 
-            result = self.exchangeSubgraph.query(queryStr, params)
+            result = self.get_pair_data(token0, token1)
 
             if result is not None and result["pairs"] and len(result["pairs"]) > 0:
                 reserve0 = float(result["pairs"][0]["reserve0"])
@@ -87,16 +94,8 @@ cdef class Candles():
             token0, token1 = self.order_pair(tokenA, midToken)
             token2, token3 = self.order_pair(tokenB, midToken)
 
-            params = {
-                "token0": token0,
-                "token1": token1,
-            }
-
-            result = self.exchangeSubgraph.query(queryStr, params)
-
-            params["token0"] = token2
-            params["token1"] = token3
-            result2 = self.exchangeSubgraph.query(queryStr, params)
+            result = self.get_pair_data(token0, token1)
+            result2 = self.get_pair_data(token2, token3)
 
             if (
                 result is not None and
@@ -158,9 +157,10 @@ cdef class Candles():
         Returns:
             candles list: list of formatted candles
         """
+        if len(candles) == 0:
+            return candles
 
         cdef float currentPrice = self.current_price(tokenA, tokenB, midToken)
-        logger.debug(f"currentPrice {currentPrice}")
         cdef float timestamp = datetime.now().timestamp()
         cdef int lastTime = candles[-1]["time"]
         if timestamp > lastTime+interval:
@@ -219,17 +219,68 @@ cdef class Candles():
             "skip": skip
         }
 
-        cdef dict result = self.candlesSubgraph.query(queryStr, params)
+        cdef dict result = Graph(self.candlesSubgraph).query(queryStr, params)
 
         if result is not None and result["candles"]:
             return result["candles"]
 
         return []
     
+    cdef list smooth_candles(self, list candles):
+        """# Smooth the candles, remove bad candles
+
+        Args:
+            candles list: list of candles
+        Returns:
+            candles list: list of smooth candles
+        """
+        close, high, low, open, times = zip(*map(dict.values, candles))
+        
+        # https://stackoverflow.com/a/65200210/18268694
+        # https://blog.finxter.com/how-to-find-outliers-in-python-easily/
+        def outlier_smoother(x, m=7, win=3):
+            ''' finds outliers in x, points > m*mdev(x) [mdev:median deviation] 
+            and replaces them with the median of win points around them '''
+            x_corr = x[::]
+            d = np.abs(x - np.median(x))
+            mdev = np.median(d)
+            idxs_outliers = np.nonzero(d > m*mdev)[0]
+            for i in idxs_outliers:
+                if i-win < 0:
+                    x_corr[i] = np.median(np.append(x[0:i], x[i+1:i+win+1]))
+                elif i+win+1 > len(x):
+                    x_corr[i] = np.median(np.append(x[i-win:i], x[i+1:len(x)]))
+                else:
+                    x_corr[i] = np.median(np.append(x[i-win:i], x[i+1:i+win+1]))
+            return x_corr
+
+        smooth_close = outlier_smoother(np.array(close))
+        smooth_high = outlier_smoother(np.array(high))
+        smooth_low = outlier_smoother(np.array(low))
+        smooth_open = outlier_smoother(np.array(open))
+
+        cdef list smooth_candles = []
+        for candle in zip(smooth_close, smooth_high, smooth_low, smooth_open, times):
+            smooth_candles.append({
+                "close": candle[0],
+                "high": candle[1],
+                "low": candle[2],
+                "open": candle[3],
+                "time": candle[4],
+            })
+
+        for i in range(1, len(smooth_candles)-1):
+            smooth_candles[i]['open'] =  smooth_candles[i-1]['close']
+
+        return smooth_candles
+
     def get_candles(self, str tokenA, str tokenB, int interval, int limit = 1000, int skip = 0):
         # Temporary function
         token0, token1 = self.order_pair(tokenA, tokenB)
-        candles = self.fetch_candles(
+
+        fetchCandles = Worker(
+            self.fetch_candles,
+            self,
             token0,
             token1,
             interval,
@@ -237,31 +288,79 @@ cdef class Candles():
             skip,
         )
 
-        # Accepts at least 10% of limit as the amount of candles 
-        if len(candles) < (limit/100)*10: # If there aren't enough candles, try get candles by top tokens in pangolin
-            # takes the price of tokenA in relation to defaultCoin and the price of tokenB in relation to defaultCoin and calculates the price
-            for defaultCoin in DEFAULTCOINS:
-                defaultCoin = defaultCoin.lower()
-                if defaultCoin == tokenA or defaultCoin == tokenB:
-                    continue 
+       # pairData = self.get_pair_data(token0, token1)
 
+        fetchPairData = Worker(
+            self.get_pair_data,
+            self,
+            token0,
+            token1
+        )
+
+        fetchCandles.start()
+        fetchPairData.start()
+
+        fetchCandles.join()
+        fetchPairData.join()
+
+        candles = fetchCandles.result
+        pairData = fetchPairData.result
+
+        if len(pairData['pairs']):
+            reserveUSD = float(pairData['pairs'][0]['reserveUSD'])
+        else:
+            reserveUSD = 0
+
+        # Accepts at least 10% of limit as the amount of candles 
+        if len(candles) < (limit/100)*10 and reserveUSD < 3000: # If there aren't enough candles, try get candles by top tokens in pangolin
+            # takes the price of tokenA in relation to defaultCoin and the price of tokenB in relation to defaultCoin and calculates the price
+            workers = []
+            for defaultCoin in DEFAULTCOINS:
+                if defaultCoin == tokenA or defaultCoin == tokenB:
+                    workers.append(None)
+ 
                 token0, token1 = self.order_pair(tokenA, defaultCoin)
                 token2, token3 = self.order_pair(defaultCoin, tokenB)
-                candles = self.fetch_candles(
+                workers.append(Worker(
+                    self.fetch_candles,
+                    self,
                     token0,
                     token1,
                     interval,
                     limit,
                     0,
-                )
+                ))
 
-                candles2 = self.fetch_candles(
+                workers.append(Worker(
+                    self.fetch_candles,
+                    self,
                     token2,
                     token3,
                     interval,
                     limit,
                     0,
-                )
+                ))
+
+            for worker in workers:
+                if worker is not None:
+                    worker.start()
+
+            for worker in workers:
+                if worker is not None:
+                    worker.join()  
+
+            for i in range(0, len(workers)-1, 2):
+                index = int(i/2)
+                defaultCoin = DEFAULTCOINS[index].lower()
+                if workers[i] is None or workers[i+1] is None:
+                    continue 
+
+                token0, token1 = self.order_pair(tokenA, defaultCoin)
+                token2, token3 = self.order_pair(defaultCoin, tokenB)
+
+                candles = workers[i].result
+                candles2 = workers[i+1].result
+
                 if len(candles) >= (limit/100)*10 and len(candles2) >= (limit/100)*10:
                     # filters candles where there is the same timestamp in the other candle
                     if len(candles) < len(candles2):
@@ -331,10 +430,12 @@ cdef class Candles():
                             }
                     candles = candles[::-1] # invert the array to asc order of time
                     candles = self.update_current_price(candles, tokenA, tokenB, interval, defaultCoin)
+                    candles = self.smooth_candles(candles)
                     return candles
                 else:
                     continue
-
-        candles = self.format_candles(candles, tokenA, token0)
-        candles = self.update_current_price(candles, tokenA, tokenB, interval)
+        if len(candles) > 0:
+            candles = self.format_candles(candles, tokenA, token0)
+            candles = self.update_current_price(candles, tokenA, tokenB, interval)
+            candles = self.smooth_candles(candles)
         return candles

@@ -19,7 +19,8 @@ class Server():
 
         options = {
             'bind': f'{self.args.api_host}:{self.args.api_port}',
-            'workers': 4,
+            'workers': 8,
+            'timeout': 600,
             'accesslog': 'console.log',
             'logger_class': 'src.logging.GunicornLogger',
             'access_log_format': '"%(r)s" %(s)s %(b)s "%(f)s"'
